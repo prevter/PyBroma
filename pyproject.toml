@@ -1,3 +1,13 @@
 [build-system]
-requires = ["scikit-build", "setuptools", "wheel", "cmake", "ninja", "cython"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core", "cython"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pybroma"
+version = "0.1.4"
+authors = [{ name = "Calloc" }]
+
+[tool.scikit-build]
+wheel.packages = ["pybroma"]
+wheel.install-dir = "pybroma"
+cmake.build-type = "Release"

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(PyBroma)
+project(PyBroma LANGUAGES CXX)
 
 set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
 
