@@ -3,6 +3,8 @@ build
 
 # Auto-generated/output files
 _skbuild/
+dist/
+__pycache__/
 *.egg-info/
 pybroma/PyBroma.cpp
 *.whl
