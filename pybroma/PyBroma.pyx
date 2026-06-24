@@ -649,13 +649,4 @@ cdef class Root:
         def __set__(self, obj):
             raise ImmutableError("classes")
 
-    # NOTE: Deprecation will be soon for classesAsDict & functionsAsDict Use __getitem__ instead...
-    def functionsAsDict(self) -> dict:
-        """Converts Functions to A Dictionary"""
-        return {<str>c.prototype.name: Function.init(c) for c in self.root.functions}
-
-    def classesAsDict(self) -> dict:
-        """Converts Classes to a dictionary"""
-        return {<str>c.name: Class.init(c) for c in self.root.classes}
-
 
