@@ -5,7 +5,6 @@ from .PyBroma import Class, Function # type: ignore
 from .visitor import BromaTreeVisitor
 from .external import LinesResult
 from .PyBroma import * # type: ignore
-from .platforms import Platform, list_platforms
 from warnings import warn
 
 
@@ -25,7 +24,7 @@ class BromaWriter(BromaTreeVisitor):
         super().__init__()
     
     # I don't feel bad for borrowing from cython's code-space. It's really good code. 
-    def write(self, tree:Root):
+    def write(self, tree: Root):
         self.start(tree)
         return self.result
 
@@ -57,12 +56,12 @@ class BromaWriter(BromaTreeVisitor):
     def empty_line(self):
         self.line("")
 
-    def write_type(self, node:Type):
+    def write_type(self, node: Type):
         if node.is_struct:
             self.put("struct ")
         self.put(node.name)
 
-    def write_arg_as_str(self, name:str, type:Type):
+    def write_arg_as_str(self, name: str, type: Type):
         code = ""
         if type.is_struct:
             code += "struct "
@@ -93,7 +92,7 @@ class BromaWriter(BromaTreeVisitor):
         self.put(")")
         return super().visit_FunctionProto(node)
 
-    def visit_InlineField(self, node:InlineField):
+    def visit_InlineField(self, node: InlineField):
         first , second = node.inner.split("\n", 1)
         second, _ = second.split("\n", -1)
         self.line(first)
@@ -126,14 +125,14 @@ class BromaWriter(BromaTreeVisitor):
 
         return super().visit_MemberFunctionProto(node)
 
-    def visit_PlatformNumber(self, node:PlatformNumber):
+    def visit_PlatformNumber(self, node: PlatformNumber):
         # skip if there is nothing to be binded with...
         if platforms := node.platforms_as_dict():
             self.put(" = ") 
             self.put(", ".join(["%s = %s" % (k, v) for k, v in platforms.items()]))
     
 
-    def visit_FunctionBindField(self, node:FunctionBindField):
+    def visit_FunctionBindField(self, node: FunctionBindField):
         if node.prototype.attrs.docs:
             self.empty_line()
             self.write_docs(node.prototype.attrs.docs)
@@ -154,10 +153,10 @@ class BromaWriter(BromaTreeVisitor):
         self.put(node.name)
         self.endline(";")
 
-    def visit_Attributes(self, node:Attributes):
+    def visit_Attributes(self, node: Attributes):
 
         self.put("[[link(")
-        self.put(",".join(list_platforms(Platform(node.links))))
+        self.put(",".join(node.links))
         self.endline(")]]")
 
     def visit_Class(self, node: Class):

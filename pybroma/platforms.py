@@ -1,7 +1,6 @@
 from enum import IntFlag
 
 
-
 class Platform(IntFlag):
     """Special Platform Number NOTE: 
     This hasn't been merged to cython yet due to 
@@ -16,10 +15,7 @@ class Platform(IntFlag):
     MacArm = 64
     Mac = MacIntel | MacArm
 
-def list_platforms(links: Platform | int) -> list[str]:
-    if isinstance(links, int):
-        links = Platform(links)
-
+def list_platforms(links: int) -> list[str]:
     link_list = []
 
     if links & Platform.Android:
