@@ -1,14 +1,28 @@
+*~
+.DS_Store
+.vscode/
+.idea/
+.venv/
+
+*.pyc
+*.pyo
 *.pyd
-build
+*.so
+*.dll
+*.dylib
+.pytest_cache/
+.ruff_cache/
 
 # Auto-generated/output files
+.build/
 _skbuild/
 dist/
-__pycache__/
+build/
+**/__pycache__/
 *.egg-info/
 pybroma/PyBroma.cpp
+pybroma/PyBroma.h
+pybroma/PyBroma_api.h
+pybroma/_version.py
 *.whl
-_version.py
-
-# External unittests I'll make a seperate repo for these in the future - Calloc
-tests
+*.tar.gz
