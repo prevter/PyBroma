@@ -15,14 +15,14 @@ class NotImplementedWarning(Warning):
 # Inspired by Cython's Code Writer
 class BromaWriter(BromaTreeVisitor):
     """Inspired By Cython's Code-writer but For writing Broma Files..."""
-    
+
     indent_string = u"    "
-    
+
     def __init__(self, result=None) -> None:
         self.result = LinesResult() if not result else result
         self.numindents = 0
         super().__init__()
-    
+
     # I don't feel bad for borrowing from cython's code-space. It's really good code. 
     def write(self, tree: Root):
         self.start(tree)
@@ -66,24 +66,18 @@ class BromaWriter(BromaTreeVisitor):
         if type.is_struct:
             code += "struct "
         return code + (type.name + " " + name)
-        
+
     def write_docs(self, docs:str):
         for n in docs.strip().splitlines():
             if n.strip():
                 self.line("/// " + n)
-        
+
     def write_args(self, args:dict[str, Type]):
         self.put(", ".join([self.write_arg_as_str(name, type) for name, type in args.items()]))
 
     def visit_FunctionProto(self, node: FunctionProto):
-        if node.docs:
-            self.write_docs(node.docs)
-        if node.is_virtual:
-            self.put("virtual ")
-        if node.is_static:
-            self.put("static ")
-        if node.is_const:
-            self.put("const ")
+        if node.attrs.docs:
+            self.write_docs(node.attrs.docs)
         self.write_type(node.ret)
         self.put(" " + node.name)
         self.put("(")
@@ -102,7 +96,6 @@ class BromaWriter(BromaTreeVisitor):
             self.putNoIndent(s.replace("\t","    "))
         self.dedent()
         self.line("}")
-        
 
     def visit_MemberFunctionProto(self, node: MemberFunctionProto):
         self.startline()
@@ -130,7 +123,6 @@ class BromaWriter(BromaTreeVisitor):
         if platforms := node.platforms_as_dict():
             self.put(" = ") 
             self.put(", ".join(["%s = %s" % (k, v) for k, v in platforms.items()]))
-    
 
     def visit_FunctionBindField(self, node: FunctionBindField):
         if node.prototype.attrs.docs:
@@ -144,8 +136,6 @@ class BromaWriter(BromaTreeVisitor):
         if node.prototype.attrs.docs:
             self.empty_line()
 
-                
-
     def visit_MemberField(self, node: MemberField):
         self.startline()
         self.write_type(node.type)
@@ -154,7 +144,6 @@ class BromaWriter(BromaTreeVisitor):
         self.endline(";")
 
     def visit_Attributes(self, node: Attributes):
-
         self.put("[[link(")
         self.put(",".join(node.links))
         self.endline(")]]")
@@ -174,12 +163,10 @@ class BromaWriter(BromaTreeVisitor):
         self.putline("}")
         self.line("")
         return ret
-    
+
     def visit_Function(self, node: Function):
         ret = super().visit_Function(node) 
         return ret 
 
-
     def write_result(self):
         return "\n".join(self.result.lines)
-

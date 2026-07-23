@@ -53,7 +53,7 @@ class BromaTreeVisitor:
     
     def start(self, root:Root):
         self.root = root
-        for c in root.classes.values():
+        for c in root.classes:
             self.visit_Class(c)
         for f in root.functions:
             self.visit_Function(f)

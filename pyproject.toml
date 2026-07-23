@@ -4,6 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "pybroma"
+# remember to bump in __init__.py too!
 version = "0.2.0"
 authors = [{ name = "Calloc" }]
 maintainers = [
@@ -21,7 +22,7 @@ wheel.install-dir = "pybroma"
 ninja.version = ">=1.11"
 cmake.version = "CMakeLists.txt"
 cmake.build-type = "Release"
-sdist.exclude = [".github", ".gitignore"]
+sdist.exclude = [".github"]
 
 [[tool.scikit-build.generate]]
 path = "pybroma/_version.py"
