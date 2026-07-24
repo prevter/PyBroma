@@ -7,7 +7,7 @@ except ImportError:
         import importlib.metadata
         __version__ = importlib.metadata.version("pybroma")
     except Exception:
-        __version__ = "0.2.0"
+        __version__ = "0.3.1"
 
 from .PyBroma import (
     AccessModifier,

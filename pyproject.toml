@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "pybroma"
 # remember to bump in __init__.py too!
-version = "0.3.0"
+version = "0.3.1"
 authors = [{ name = "Calloc" }]
 maintainers = [
     { name = "prevter" },
