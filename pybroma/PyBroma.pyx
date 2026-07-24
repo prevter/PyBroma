@@ -145,10 +145,10 @@ cdef class PlatformNumber:
 cdef class FunctionProto:
     cdef:
         broma.FunctionProto fproto
-        dict _args
+        list _args
 
     def __cinit__(self):
-        self._args = dict()
+        self._args = list()
         pass
 
     cdef void _init(self, broma.FunctionProto proto) noexcept:
@@ -181,10 +181,10 @@ cdef class FunctionProto:
 cdef class MemberFunctionProto:
     cdef:
         broma.MemberFunctionProto mfproto
-        dict _args
+        list _args
 
     def __cinit__(self):
-        self._args = dict()
+        self._args = list()
         pass
 
     cdef void _init(self, broma.MemberFunctionProto proto):
