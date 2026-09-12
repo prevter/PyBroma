@@ -9,7 +9,7 @@ from warnings import warn
 
 
 class NotImplementedWarning(Warning):
-    pass 
+    pass
 
 
 # Inspired by Cython's Code Writer
@@ -23,7 +23,7 @@ class BromaWriter(BromaTreeVisitor):
         self.numindents = 0
         super().__init__()
 
-    # I don't feel bad for borrowing from cython's code-space. It's really good code. 
+    # I don't feel bad for borrowing from cython's code-space. It's really good code.
     def write(self, tree: Root):
         self.start(tree)
         return self.result
@@ -72,8 +72,8 @@ class BromaWriter(BromaTreeVisitor):
             if n.strip():
                 self.line("/// " + n)
 
-    def write_args(self, args:dict[str, Type]):
-        self.put(", ".join([self.write_arg_as_str(name, type) for name, type in args.items()]))
+    def write_args(self, args: list[tuple[str, Type]]):
+        self.put(", ".join([self.write_arg_as_str(name, type) for name, type in args]))
 
     def visit_FunctionProto(self, node: FunctionProto):
         if node.attrs.docs:
@@ -107,6 +107,7 @@ class BromaWriter(BromaTreeVisitor):
             self.put("const ")
 
         if node.is_callback:
+            # is_callback is __optcall calling convention for MSVC 32-bit
             warn("\"is_callback\" has not been implemented yet I don't know what to do here yet - Calloc", NotImplementedWarning)
 
         self.write_type(node.ret)
@@ -121,7 +122,7 @@ class BromaWriter(BromaTreeVisitor):
     def visit_PlatformNumber(self, node: PlatformNumber):
         # skip if there is nothing to be binded with...
         if platforms := node.platforms_as_dict():
-            self.put(" = ") 
+            self.put(" = ")
             self.put(", ".join(["%s = %s" % (k, v) for k, v in platforms.items()]))
 
     def visit_FunctionBindField(self, node: FunctionBindField):
@@ -165,8 +166,8 @@ class BromaWriter(BromaTreeVisitor):
         return ret
 
     def visit_Function(self, node: Function):
-        ret = super().visit_Function(node) 
-        return ret 
+        ret = super().visit_Function(node)
+        return ret
 
     def write_result(self):
         return "\n".join(self.result.lines)

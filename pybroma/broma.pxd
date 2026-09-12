@@ -4,12 +4,15 @@
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.utility cimport pair
+from libcpp.unordered_set cimport unordered_set
 
 
 ctypedef long long ptrdiff_t
 
 cdef extern from "ast.hpp" namespace "broma" nogil:
-    
+    cdef cppclass ParseError:
+        vector[string] messages
+
     enum class Platform:
         pass
 
@@ -21,6 +24,7 @@ cdef extern from "ast.hpp" namespace "broma" nogil:
         Platform missing # All the platforms that are missing the class or function
         vector[string] depends # List of classes that this class or function depends on
         string since # The Geode SDK version that this class or function was introduced in.
+        vector[string] renamed_from # Prior names for the attributed property.
 
     # offsets for each platform
     struct PlatformNumber:
@@ -40,6 +44,7 @@ cdef extern from "ast.hpp" namespace "broma" nogil:
         Type ret
         vector[pair[Type, string]] args
         string name
+        bint is_variadic
 
     enum class FunctionType:
         Normal = 0
@@ -63,12 +68,15 @@ cdef extern from "ast.hpp" namespace "broma" nogil:
     struct FunctionBindField:
         MemberFunctionProto prototype
         PlatformNumber binds # The offsets, separated per platform.
+        string inner # The (optional) inline body of the function as a raw string.
 
     # @brief A class's member variables.
     struct MemberField:
-        Platform platform # For platform-specific members, all platforms this member is defined on 
+        Attributes attributes # Attributes associated with the member field.
+        Platform platform # For platform-specific members, all platforms this member is defined on
         string name # The name of the field.
         Type type # The type of the field.
+        size_t count # The number of elements in the field when it's an array (pretty much unused since we use std::array).
 
     # @brief Any class padding.
     struct PadField:
@@ -87,11 +95,15 @@ cdef extern from "ast.hpp" namespace "broma" nogil:
     struct Function:
         FunctionProto prototype # The free function's signature.
         PlatformNumber binds # The offsets of free function, separated per platform.
+        string inner # The (optional) inline body of the function as a raw string.
+        string source
         size_t line
 
     struct Header:
         string name
         Platform platform
+        string source
+        size_t line
 
     struct Class:
         Attributes attributes
@@ -106,17 +118,42 @@ cdef extern from "ast.hpp" namespace "broma" nogil:
         vector[Function] functions
         vector[Header] headers
 
+        vector[Field*] allFields()
+        Field* getFieldById(size_t field_id)
+        unordered_set[string] sources()
+        Root filterBySource(string source)
 
-cdef extern from "helper.hpp" nogil:
+
+cdef extern from "helper.hpp" namespace "pybroma" nogil:
     enum class OffsetStatus:
         Unbound = 0
         Bound = 1
         Inlined = 2
 
+    enum class FieldVariant:
+        Inline = 0
+        FunctionBind = 1
+        Pad = 2
+        Member = 3
+
+    bint parse_file_to_root(
+        string fname,
+        Root& out,
+        ParseError& err
+    )
+    bint parse_string_to_root(
+        string source,
+        string include_base,
+        string source_name,
+        Root& out,
+        ParseError& err
+    )
+
     OffsetStatus platform_offset_status(PlatformNumber pn, string plat)
     bint platform_has(Platform p, string plat)
     ptrdiff_t platform_number_for(PlatformNumber pn, string plat)
     vector[string] list_platforms(Platform p)
+    FieldVariant Field_GetVariant(Field* f)
 
     InlineField* Field_GetAs_InlineField(Field* f)
     FunctionBindField* Field_GetAs_FunctionBindField(Field* f)
@@ -128,7 +165,3 @@ cdef extern from "helper.hpp" nogil:
     bint ClassEqualsTo(Class a, Class b)
     bint ClassEqualsToName(Class a, string b)
     MemberFunctionProto* FieldGetFn(Field* field)
-
-
-cdef extern from "broma.hpp" namespace "broma" nogil:
-    Root parse_file(string fname)

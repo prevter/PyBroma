@@ -8,7 +8,9 @@ A Python wrapper for [Broma](https://github.com/geode-sdk/broma), designed to pa
 ## Features
 
 - **Fast Prototyping:** Avoid slow C++ compile times with a scriptable Python environment.
+- **Python Compatibility:** Provides many Python-specific extras and functionalities to feel native to the language.
 - **Mod Automation:** Generate code and automate reverse-engineering workflows for Geometry Dash and Geode mods.
+- **Data Analysis:** Useful for using in simple apps to analyze Broma ASTs seamlessly.
 - **Tooling Support:** Ideal for creating tool-specific headers (e.g. Ghidra/IDA header files like in [BromaIDA](https://github.com/Stazzical/BromaIDA)).
 
 ## How To Use
@@ -16,41 +18,20 @@ A Python wrapper for [Broma](https://github.com/geode-sdk/broma), designed to pa
 ```python
 from pybroma import Root
 
-
-# test.bro:
-# class BindedClass {
-#     void bindedFunction() = mac 0xd5db0, win 0x3c8d, ios 0xa83bc;
-
-#     int m_member1;
-#     int m_member2;
-# }
-
-# class OtherBindedClass : BindedClass {
-#     virtual void otherBindedFunction() = mac 0x7e3bc, win 0x5a1c, ios 0x8e412;
-
-#     // win and ios addresses have not been found yet, will not generate
-#     static int staticFunction(int a, bool c) = mac 0x74bd3;
-
-#     // Embed c++ code
-#     inline int getIndex(int index) {
-#         return m_myVector[index];
-#     } 
-
-#     // templates supported
-#     std::vector<int> m_myVector;
-# }
-
+# parses 'test.bro' in current working directory
 root = Root("test.bro")
-for c in root.classes:
-    for f in c.fields:
-        # NOTE: functions that aren't a Function Bind Field do not return...
-        if func := f.getAsFunctionBindField():
-            # This will make a dictionary mainly to make iteration a bit easier...
-            print(func.prototype.args)
-# output        
-# {}
-# {}
-# {'a': <pybroma.PyBroma.Type object at 0x0000018C6D507B70>, 'c': <pybroma.PyBroma.Type object at 0x0000018C6D507B30>}
+
+for cls in root.classes:
+    print(f"class {cls.name}")
+    for field in cls.fields:
+        # a Field instance can be of different variants
+        if fn := field.getAsFunctionBindField():
+            # fn.proto is a MemberFunctionProto instance
+            args = ", ".join(f"{t} {n}" for n, t in fn.proto.args)
+            print(f"  {fn.proto.ret} {fn.proto.name}({args})")
+
+            for plat in fn.binds:
+                print(f"    {plat}: {fn.binds[plat]:#x}")
 ```
 
 ## Installation
@@ -58,6 +39,22 @@ for c in root.classes:
 ### Option 1: Install via Prebuilt Wheels
 
 Download the compatible wheel for your OS, architecture, and Python version from the [GitHub Releases](https://github.com/prevter/PyBroma/releases) page.
+
+Wheel filenames encode the Python version (`cp312`) and platform (`win_amd64`, `linux_x86_64`, `macosx_26_0_arm64`, etc.). Pick the one matching your interpreter and OS.
+
+Install the wheel file with `pip`:
+
+```bash
+pip install path/to/pybroma-0.3.1-cp312-cp312-win_amd64.whl
+```
+
+If there's no prebuilt wheel for your platform, download and install the source distribution instead from the releases page:
+
+```bash
+pip install path/to/pybroma-0.3.1.tar.gz
+```
+
+Building from source requires a C++20 compiler suite like Visual Studio, GCC or Xcode Command Line Tools.
 
 ### Option 2: Install directly from Git
 
@@ -77,11 +74,8 @@ Due to licensing and redistribution limitations regarding the original codebase,
 
 There are no current plans for official adoption. If you find the tool useful for Geode development, feel free to recommend it to others in the community.
 
-## Bugs and Issues
-
-- No known issues at this time. If you get any errors while using PyBroma or scripts using it (e.g. BromaIDA), make sure you have installed the latest version available.
-
 ## TODOs
 
 - [ ] Broma Writer/Formatter
 - [ ] Class member injector (For helping with pull requests to the bindings)
+- [ ] Ability to create an AST by hand from scratch and export it
