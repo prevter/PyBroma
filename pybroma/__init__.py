@@ -9,16 +9,23 @@ except ImportError:
     except Exception:
         __version__ = "0.3.1"
 
+
 from .PyBroma import (
+    # enums
     AccessModifier,
+    FieldVariant,
+    FunctionType,
+    OffsetStatus,
+    # exceptions
+    BromaParseError,
+    # core
     Attributes,
     Class,
     Field,
-    Header,
     Function,
     FunctionBindField,
     FunctionProto,
-    FunctionType,
+    Header,
     InlineField,
     MemberField,
     MemberFunctionProto,
@@ -31,15 +38,22 @@ from .visitor import BromaTreeVisitor
 
 # Defines the explicit public interface for Pylance and users
 __all__ = [
+    "__version__",
+    # enums
     "AccessModifier",
+    "FieldVariant",
+    "FunctionType",
+    "OffsetStatus",
+    # exceptions
+    "BromaParseError",
+    # core
     "Attributes",
     "Class",
-    "Header",
     "Field",
     "Function",
     "FunctionBindField",
     "FunctionProto",
-    "FunctionType",
+    "Header",
     "InlineField",
     "MemberField",
     "MemberFunctionProto",
@@ -47,5 +61,6 @@ __all__ = [
     "PlatformNumber",
     "Root",
     "Type",
+    # visitor
     "BromaTreeVisitor",
 ]

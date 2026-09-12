@@ -2,35 +2,35 @@ from .PyBroma import *
 # Inspired by Cython's Compiler Tree Visitors...
 
 class BromaTreeVisitor:
-    """Used to safely visit different Parts of a broma file
-    and is built to allow for easy visiting of all the parts 
-    you need in your code"""
+    """
+    Used to seamlessly visit different parts of a Broma AST.
+    """
 
     def visit_PlatformNumber(self, node):
-        return 
+        return
 
     def visit_FunctionProto(self, node: FunctionProto):
-        return 
+        return
 
     def visit_MemberFunctionProto(self, node: MemberFunctionProto):
         return
-    
+
     def visit_Attributes(self, node: Attributes):
         return
-    
+
     def visit_InlineField(self, node: InlineField):
-        return 
+        return
 
     def visit_FunctionBindField(self, node: FunctionBindField):
         self.visit_MemberFunctionProto(node.prototype)
         self.visit_PlatformNumber(node.binds)
 
     def visit_MemberField(self, node: MemberField):
-        pass 
+        pass
 
     def visit_PadField(self, node: PadField):
         pass
- 
+
     def visit_Field(self, f:Field):
         if x := f.getAsFunctionBindField():
             self.visit_FunctionBindField(x)
@@ -50,7 +50,7 @@ class BromaTreeVisitor:
             self.visit_Attributes(node.attrs)
         for f in node.fields:
             self.visit_Field(f)
-    
+
     def start(self, root:Root):
         self.root = root
         for c in root.classes:

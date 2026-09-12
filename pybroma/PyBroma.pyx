@@ -2,6 +2,7 @@
 # distutils: language = c++
 # cython: c_string_type=str, c_string_encoding=utf8
 
+import os
 from enum import IntEnum
 from functools import cached_property
 
@@ -16,10 +17,18 @@ cdef extern from *:
     """
 #define DEPACK(x) *x
     """
+    broma.Field DEPACK(broma.Field* x)
     broma.PadField DEPACK(broma.PadField* x)
     broma.MemberField DEPACK(broma.MemberField* x)
     broma.InlineField DEPACK(broma.InlineField* x)
     broma.FunctionBindField DEPACK(broma.FunctionBindField* x)
+    broma.MemberFunctionProto DEPACK(broma.MemberFunctionProto* x)
+
+
+class BromaParseError(Exception):
+    def __init__(self, messages: list[str]):
+        self.messages = messages
+        super().__init__("\n".join(messages))
 
 
 class FunctionType(IntEnum):
@@ -37,16 +46,25 @@ class OffsetStatus(IntEnum):
     Bound = 1
     Inlined = 2
 
+class FieldVariant(IntEnum):
+    Inline = 0
+    FunctionBind = 1
+    Pad = 2
+    Member = 3
+
+
 cdef class Attributes:
     cdef:
         broma.Attributes attributes
         list _depends
+        list _rn_from
 
     def __cinit__(self):
         self._depends = []
+        self._rn_from = []
 
     @property
-    def docs(self): return <str>self.attributes.docs
+    def docs(self): return self.attributes.docs
 
     @property
     def links(self):
@@ -63,7 +81,13 @@ cdef class Attributes:
         return self._depends
 
     @property
-    def since(self): return <str>self.attributes.since
+    def since(self): return self.attributes.since
+
+    @property
+    def renamed_from(self):
+        if not self._rn_from:
+            self._rn_from = [<str>rn for rn in self.attributes.renamed_from]
+        return self._rn_from
 
     @staticmethod
     cdef Attributes init(broma.Attributes attrs):
@@ -71,11 +95,26 @@ cdef class Attributes:
         _attr.attributes = attrs
         return _attr
 
+    def __repr__(self):
+        parts = []
+        if self.links: parts.append(f"links={self.links!r}")
+        if self.missing: parts.append(f"missing={self.missing!r}")
+        if self.depends: parts.append(f"depends={self.depends!r}")
+        if self.since: parts.append(f"since={self.since!r}")
+        if self.renamed_from: parts.append(f"renamed_from={self.renamed_from!r}")
+        return f"<Attributes {' '.join(parts)}>" if parts else "<Attributes>"
+
+    def __getitem__(self, str key):
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            raise KeyError(key)
+
 
 cdef class Type:
     cdef:
         broma.Type type
-    
+
     def __cinit__(self):
         pass
 
@@ -84,22 +123,41 @@ cdef class Type:
     @property
     def name(self): return self.type.name
 
-    def __eq__(self, Type t):
-        return broma.TypeEquals(self.type, t)
-
     @staticmethod
-    cdef Type init(broma.Type t) noexcept:
+    cdef Type init(broma.Type t):
         cdef Type _type = Type()
         _type.type = t
         return _type
+
+    def __str__(self):
+        return self.type.name
+
+    def __repr__(self):
+        return f"{'struct ' if self.is_struct else ''}{self.type.name}"
+
+    def __bool__(self):
+        return self.type.name != ""
+
+    def __eq__(self, Type t):
+        return broma.TypeEquals(self.type, t)
+
+    def __hash__(self):
+        return hash(self.type.name)
 
 
 cdef class PlatformNumber:
     cdef:
         broma.PlatformNumber binds
+        list _plats
+        dict _platbinds
 
     def __cinit__(self):
-        pass
+        # this can later be dynamically populated whenever broma supports it
+        self._plats = [
+            "win", "android32", "android64",
+            "imac", "m1", "ios"
+        ]
+        self._platbinds = {}
 
     @property
     def win(self): return self.binds.win
@@ -119,41 +177,61 @@ cdef class PlatformNumber:
         return b if b >= 0 else None
 
     def platforms_as_dict(self):
-        cdef list plats = [
-            "win", "android32", "android64",
-            "imac", "m1", "ios"
-        ]
-        cdef dict d = {}
-
-        for plat in plats:
-            bind = self.for_platform(plat)
-            if bind is not None:
-                d[plat] = hex(bind)
-
-        return d
+        if not self._platbinds:
+            self._platbinds = {
+                plat: broma.platform_number_for(self.binds, plat)
+                for plat in self._plats
+            }
+        return self._platbinds
 
     def status_for(self, str plat):
         return OffsetStatus(<int>broma.platform_offset_status(self.binds, plat))
 
     @staticmethod
-    cdef PlatformNumber init(broma.PlatformNumber pnum) noexcept:
+    cdef PlatformNumber init(broma.PlatformNumber pnum):
         cdef PlatformNumber _pn = PlatformNumber()
         _pn.binds = pnum
         return _pn
+
+    def __repr__(self):
+        parts = ", ".join(
+            f"{plat}={self[plat]:#x}"
+            for plat in self._plats
+        )
+        return f"<PlatformNumber {parts}>"
+
+    def __len__(self):
+        return sum(
+            1 for plat in self._plats
+            if self.for_platform(plat) is not None
+        )
+
+    def __contains__(self, str plat):
+        return self.for_platform(plat) is not None
+
+    def __iter__(self):
+        for plat in self._plats:
+            if self.for_platform(plat) is not None:
+                yield plat
+
+    def __eq__(self, PlatformNumber other):
+        return all(self[plat] == other[plat] for plat in self._plats)
+
+    def __hash__(self):
+        return hash(tuple(self[plat] for plat in self._plats))
+
+    def __getitem__(self, str plat):
+        if plat not in self._plats:
+            raise KeyError(plat)
+        return broma.platform_number_for(self.binds, plat)
 
 
 cdef class FunctionProto:
     cdef:
         broma.FunctionProto fproto
-        list _args
 
     def __cinit__(self):
-        self._args = list()
         pass
-
-    cdef void _init(self, broma.FunctionProto proto) noexcept:
-        self.fproto = proto
-        self._args = [(a.second, Type.init(a.first)) for a in proto.args]
 
     @property
     def attributes(self):
@@ -166,52 +244,62 @@ cdef class FunctionProto:
     @property
     def ret(self): return Type.init(self.fproto.ret)
     @property
-    def args(self): return self._args
+    def args(self): return [(a.second, Type.init(a.first)) for a in self.fproto.args]
     @property
     def name(self): return <str>self.fproto.name
 
+    @property
+    def is_variadic(self): return self.fproto.is_variadic
+
     @staticmethod
-    cdef FunctionProto init(broma.FunctionProto fp) noexcept:
+    cdef FunctionProto init(broma.FunctionProto fp):
         cdef FunctionProto _fp = FunctionProto()
-        _fp._init(fp)
+        _fp.fproto = fp
         return _fp
 
+    def __repr__(self):
+        args = ", ".join(f"{t} {n}" for n, t in self.args)
+        if self.is_variadic:
+            args = f"{args}, ..." if args else "..."
+        return f"<FunctionProto {self.ret} {self.name}({args})>"
 
-# we don't need to mirror the C++ inheritence here...
+    def __eq__(self, FunctionProto other):
+        return broma.FunctionProtoEquals(self.fproto, other.fproto)
+
+    def __hash__(self):
+        return hash((self.name, tuple(t.name for _, t in self.args)))
+
+
+# it's not quite easy to mirror the actual struct inheritence from C++ in Cython
+# so the inherited properties are just copy-pasted for now
 cdef class MemberFunctionProto:
     cdef:
         broma.MemberFunctionProto mfproto
-        list _args
 
     def __cinit__(self):
-        self._args = list()
         pass
-
-    cdef void _init(self, broma.MemberFunctionProto proto):
-        self.mfproto = proto
-        self._args = [(a.second, Type.init(a.first)) for a in proto.args]
 
     # inherited from FunctionProto
     @property
-    def attributes(self):
-        return Attributes.init(self.mfproto.attributes)
+    def attributes(self): return Attributes.init(self.mfproto.attributes)
     @property
     def attrs(self): return self.attributes
 
     @property
     def ret(self): return Type.init(self.mfproto.ret)
     @property
-    def args(self): return self._args
+    def args(self): return [(a.second, Type.init(a.first)) for a in self.mfproto.args]
     @property
     def name(self): return <str>self.mfproto.name
 
+    @property
+    def is_variadic(self): return self.mfproto.is_variadic
+
     # MemberFunctionProto members
     @property
-    def type(self):
-        return FunctionType(<int>self.mfproto.type)
+    def type(self): return FunctionType(<int>self.mfproto.type)
     @property
-    def access(self):
-        return AccessModifier(<int>self.mfproto.access)
+    def access(self): return AccessModifier(<int>self.mfproto.access)
 
     @property
     def is_const(self): return self.mfproto.is_const
@@ -222,14 +310,40 @@ cdef class MemberFunctionProto:
     @property
     def is_static(self): return self.mfproto.is_static
 
+    @property
+    def is_ctor(self): return self.type == FunctionType.Ctor
+    @property
+    def is_dtor(self): return self.type == FunctionType.Dtor
+
+    @staticmethod
+    cdef MemberFunctionProto init(broma.MemberFunctionProto proto):
+        cdef MemberFunctionProto _mfp = MemberFunctionProto()
+        _mfp.mfproto = proto
+        return _mfp
+
+    def __repr__(self):
+        args = ", ".join(f"{t} {n}" for n, t in self.args)
+        if self.is_variadic:
+            args = f"{args}, ..." if args else "..."
+
+        leading = " ".join(f for f in ("static", "virtual") if getattr(self, f"is_{f}"))
+        if leading:
+            leading += " "
+
+        ret = f"{self.ret} " if self.ret else ""
+        trailing = " const" if self.is_const else ""
+
+        return (
+            f"<MemberFunctionProto "
+            f"{self.access.name.lower()} "
+            f"{leading}{ret}{self.name}({args}){trailing}>"
+        )
+
     def __eq__(self, MemberFunctionProto mfp):
         return broma.MemberFunctionProtoEquals(self.mfproto, mfp.mfproto)
 
-    @staticmethod
-    cdef MemberFunctionProto init(broma.MemberFunctionProto proto) noexcept:
-        cdef MemberFunctionProto _mfp = MemberFunctionProto()
-        _mfp._init(proto)
-        return _mfp
+    def __hash__(self):
+        return hash((self.name, tuple(t.name for _, t in self.args)))
 
 
 cdef class FunctionBindField:
@@ -245,14 +359,25 @@ cdef class FunctionBindField:
     def proto(self): return self.prototype
 
     @property
-    def binds(self):
-        return PlatformNumber.init(self.fbfield.binds)
+    def binds(self): return PlatformNumber.init(self.fbfield.binds)
+
+    @property
+    def inner(self): return <str>self.fbfield.inner
 
     @staticmethod
-    cdef FunctionBindField init(broma.FunctionBindField fbf) noexcept:
+    cdef FunctionBindField init(broma.FunctionBindField fbf):
         cdef FunctionBindField _fbf = FunctionBindField()
         _fbf.fbfield = fbf
         return _fbf
+
+    def __repr__(self):
+        return f"<FunctionBindField {self.proto!r} @ {self.binds!r}>"
+
+    def __eq__(self, FunctionBindField other):
+        return self.proto == other.proto and self.binds == other.binds
+
+    def __hash__(self):
+        return hash((self.proto, self.binds))
 
 
 cdef class MemberField:
@@ -261,6 +386,12 @@ cdef class MemberField:
 
     def __cinit__(self):
         pass
+
+    @property
+    def attributes(self):
+        return Attributes.init(self.mfield.attributes)
+    @property
+    def attrs(self): return self.attributes
 
     @property
     def platform(self):
@@ -272,11 +403,18 @@ cdef class MemberField:
     @property
     def type(self): return Type.init(self.mfield.type)
 
+    @property
+    def count(self): return self.mfield.count
+
     @staticmethod
-    cdef MemberField init(broma.MemberField mfld) noexcept:
+    cdef MemberField init(broma.MemberField mfld):
         cdef MemberField _mf = MemberField()
         _mf.mfield = mfld
         return _mf
+
+    def __repr__(self):
+        count = f" count={self.count}" if self.count else ""
+        return f"<MemberField {self.type} {self.name}{count}>"
 
 
 cdef class PadField:
@@ -296,6 +434,9 @@ cdef class PadField:
         _pf.pfield = pfld
         return _pf
 
+    def __repr__(self):
+        return f"<PadField {self.amount!r}>"
+
 
 cdef class InlineField:
     cdef broma.InlineField ifield
@@ -311,6 +452,12 @@ cdef class InlineField:
         _if.ifield = ifld
         return _if
 
+    def __repr__(self):
+        preview = self.inner[:32].replace("\n", "\\n")
+        if len(self.inner) > 32:
+            preview += "..."
+        return f"<InlineField {preview!r}>"
+
 
 cdef class Field:
     cdef:
@@ -320,7 +467,10 @@ cdef class Field:
         pass
 
     @property
-    def id(self): return self.field.field_id
+    def field_id(self): return self.field.field_id
+    @property
+    def id(self): return self.field_id
+
     @property
     def parent(self): return <str>self.field.parent
     @property
@@ -342,9 +492,16 @@ cdef class Field:
         cdef broma.InlineField* x = broma.Field_GetAs_InlineField(&self.field)
         return InlineField.init(DEPACK(x)) if x != nullptr else None
 
+    def get_method_proto(self):
+        cdef broma.MemberFunctionProto* p = broma.FieldGetFn(&self.field)
+        return MemberFunctionProto.init(DEPACK(p)) if p != nullptr else None
+
     def for_platform(self, str plat):
         fb = self.getAsFunctionBindField()
         if fb is not None:
+            # the function's prototype may still matter
+            # even if it has no binding address
+            # only omit explicit missing attributed functions
             return fb if plat not in fb.proto.attrs.missing else None
 
         mf = self.getAsMemberField()
@@ -362,11 +519,17 @@ cdef class Field:
 
         return None
 
+    @property
+    def variant(self): return FieldVariant(<int>broma.Field_GetVariant(&self.field))
+
     @staticmethod
-    cdef Field init(broma.Field fld) noexcept:
+    cdef Field init(broma.Field fld):
         cdef Field _f = Field()
         _f.field = fld
         return _f
+
+    def __repr__(self):
+        return f"<Field id={self.field_id} variant={self.variant.name} parent={self.parent!r}>"
 
 
 cdef class Function:
@@ -377,23 +540,35 @@ cdef class Function:
         pass
 
     @property
-    def prototype(self):
-        return FunctionProto.init(self.func.prototype)
+    def prototype(self): return FunctionProto.init(self.func.prototype)
     @property
     def proto(self): return self.prototype
 
     @property
-    def binds(self):
-        return PlatformNumber.init(self.func.binds)
+    def binds(self): return PlatformNumber.init(self.func.binds)
 
+    @property
+    def inner(self): return <str>self.func.inner
+
+    @property
+    def source(self): return self.func.source
     @property
     def line(self): return self.func.line
 
     @staticmethod
-    cdef Function init(broma.Function fnc) noexcept:
+    cdef Function init(broma.Function fnc):
         cdef Function _fn = Function()
         _fn.func = fnc
         return _fn
+
+    def __repr__(self):
+        return f"<Function {self.proto!r} from {self.source!r}:{self.line}>"
+
+    def __eq__(self, Function other):
+        return self.proto == other.proto and self.binds == other.binds
+
+    def __hash__(self):
+        return hash((self.proto, self.binds))
 
 
 cdef class Header:
@@ -410,11 +585,30 @@ cdef class Header:
     def platform(self):
         return [<str>s for s in broma.list_platforms(self.header.platform)]
 
+    @property
+    def source(self): return self.header.source
+    @property
+    def line(self): return self.header.line
+
     @staticmethod
-    cdef Header init(broma.Header hdr) noexcept:
+    cdef Header init(broma.Header hdr):
         cdef Header _h = Header()
         _h.header = hdr
         return _h
+
+    def __repr__(self):
+        return f"<Header {self.name!r} platforms={self.platform!r}>"
+
+    def __eq__(self, object other):
+        if isinstance(other, Header):
+            return self.name == other.name
+        elif isinstance(other, str):
+            return self.name == other
+
+        return NotImplemented
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 cdef class Class:
@@ -470,29 +664,34 @@ cdef class Class:
         _cls.bclass = cls
         return _cls
 
+    def __repr__(self):
+        return f"<Class {self.name!r} fields={len(self.fields)} superclasses={self.superclasses!r} from {self.source!r}:{self.line}>"
+
+    def __iter__(self):
+        return iter(self.fields)
+
     def __eq__(self, object other):
         if isinstance(other, Class):
             return broma.ClassEqualsTo(self.bclass, other.bclass)
         elif isinstance(other, str):
-            return broma.ClassEqualsTo(self.bclass, other)
+            return broma.ClassEqualsToName(self.bclass, other)
 
         return NotImplemented
 
     def __hash__(self):
-        return hash(self.bclass.name)
+        return hash(self.name)
 
 
 cdef class Root:
     cdef:
         broma.Root root
-        list _functions
-        list _classes
-        list _headers
         dict _optimized_class_dict
+        dict _by_source
+        list _classes
+        list _functions
+        list _headers
 
-    def __init__(self, str fileName):
-        self.root = broma.parse_file(fileName)
-        self._functions = []
+    def _init_caches(self):
         # this is better than forwarding to the
         # Root::operator[] as it's more optimized
         self._optimized_class_dict = {
@@ -500,6 +699,37 @@ cdef class Root:
         }
 
         self._classes = list(self._optimized_class_dict.values())
+        self._functions = []
+        self._headers = []
+        self._by_source = {}
+
+    @staticmethod
+    cdef Root _root_from_cpp(broma.Root cpp_root):
+        cdef Root out = Root.__new__(Root)
+        out.root = cpp_root
+        out._init_caches()
+        return out
+
+    def __init__(self, fileName):
+        cdef broma.ParseError err
+        cdef str path = str(fileName)
+
+        if not broma.parse_file_to_root(path, self.root, err):
+            raise BromaParseError([<str>m for m in err.messages])
+
+        self._init_caches()
+
+    @staticmethod
+    def parse_string(str source, include_base = None, str source_name = "<string>"):
+        cdef Root out = Root.__new__(Root)
+        cdef str inc = str(include_base) if include_base is not None else os.getcwd()
+        cdef broma.ParseError err
+
+        if not broma.parse_string_to_root(source, inc, source_name, out.root, err):
+            raise BromaParseError([<str>m for m in err.messages])
+
+        out._init_caches()
+        return out
 
     @property
     def classes(self): return self._classes
@@ -516,5 +746,47 @@ cdef class Root:
             self._headers = [Header.init(x) for x in self.root.headers]
         return self._headers
 
-    def __getitem__(self, str _class_name_):
-        return self._optimized_class_dict[_class_name_]
+    @property
+    def sources(self): return set(self.root.sources())
+
+    def filter_by_source(self, str source):
+        return Root._root_from_cpp(self.root.filterBySource(source))
+
+    @property
+    def by_source(self):
+        if not self._by_source:
+            self._by_source = {s: self.filter_by_source(s) for s in self.sources}
+        return self._by_source
+
+    def get_field_by_id(self, size_t field_id):
+        cdef broma.Field* f = self.root.getFieldById(field_id)
+        return None if f == NULL else Field.init(DEPACK(f))
+
+    @property
+    def all_fields(self):
+        return [Field.init(DEPACK(f)) for f in self.root.allFields()]
+
+    def get_class_by_name(self, str cls_name):
+        return self._optimized_class_dict.get(cls_name)
+
+    def __repr__(self):
+        return f"<Root {len(self.classes)} classes, {len(self.functions)} functions, {len(self.headers)} headers>"
+
+    def __bool__(self):
+        # forced True because __len__ alone sets __bool__ to rely on len(Root)
+        return True
+
+    # functions can be overloaded, classes are unique
+    # so have these functionalities only be for classes
+    def __len__(self):
+        return self.root.classes.size()
+
+    def __contains__(self, str name):
+        return name in self._optimized_class_dict
+
+    def __iter__(self):
+        return iter(self._optimized_class_dict.values())
+
+    # mirrors the same operator[] for Root in Broma inside Python
+    def __getitem__(self, str cls_name):
+        return self._optimized_class_dict[cls_name]
